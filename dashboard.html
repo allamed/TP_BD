@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vigi-Crues Maroc — Tableau de bord</title>
+
+  <!-- Leaflet (carto open-source) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Polices : Fraunces pour le sérieux éditorial, IBM Plex pour le corps,
+       Plex Mono pour les chiffres opérationnels -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+
+  <style>
+    /* ============================================================
+       SYSTÈME : variables, reset, typographie de base
+       ============================================================ */
+    :root {
+      /* Palette : crème + bleu-canard profond + alertes ambrées */
+      --bg: #faf7f1;
+      --bg-card: #ffffff;
+      --bg-soft: #f3efe7;
+      --border: #e3ddd0;
+      --border-firm: #c9c1b0;
+      --ink: #1a1813;
+      --ink-soft: #5d574c;
+      --ink-mute: #8a8377;
+      --accent: #0f4c5c;
+      /* bleu-canard profond */
+      --accent-dim: #2d6e7e;
+      --water: #2e5f7a;
+
+      /* Niveaux d'alerte (chromatique marocaine, pas garish) */
+      --jaune: #d99921;
+      --orange: #c1561a;
+      --rouge: #97181a;
+      --vert-ok: #4a6b3d;
+
+      /* Gravité des événements */
+      --grav-faible: #8a9b6c;
+      --grav-moyen: #d99921;
+      --grav-fort: #c1561a;
+      --grav-majeur: #6b1314;
+
+      /* Espacements et tailles */
+      --r: 4px;
+      --r-lg: 6px;
+      --shadow-soft: 0 1px 2px rgba(26, 24, 19, .04), 0 4px 12px rgba(26, 24, 19, .04);
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--ink);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      margin: 0;
+    }
+
+    .mono,
+    .num {
+      font-family: 'IBM Plex Mono', Menlo, monospace;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ============================================================
+       STRUCTURE : header / sidebar / map
+       ============================================================ */
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .brand-mark {
+      font-family: 'Fraunces', serif;
+      font-size: 22px;
+      font-style: italic;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: -0.02em;
+    }
+
+    .brand-sub {
+      font-size: 12px;
+      color: var(--ink-mute);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+
+    .refresh-btn {
+      background: transparent;
+      border: 1px solid var(--border-firm);
+      color: var(--ink);
+      padding: 6px 12px;
+      border-radius: var(--r);
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+
+    .refresh-btn:hover {
+      background: var(--bg-soft);
+    }
+
+    .refresh-btn:disabled {
+      opacity: .4;
+      cursor: wait;
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 0;
+    }
+
+    .map {
+      position: relative;
+    }
+
+    #map {
+      height: 100%;
+      width: 100%;
+      background: var(--bg-soft);
+    }
+
+    /* ============================================================
+       SIDEBAR : sections
+       ============================================================ */
+    .sec {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sec-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-mute);
+      margin: 0 0 12px 0;
+    }
+
+    /* Bannière alertes en cours */
+    .alert-banner {
+      background: linear-gradient(180deg, #fdf0d4 0%, #fae6c0 100%);
+      border-left: 3px solid var(--rouge);
+      padding: 14px 18px;
+      margin: 18px 22px 0 22px;
+      border-radius: var(--r-lg);
+    }
+
+    .alert-banner.is-quiet {
+      background: var(--bg-soft);
+      border-left-color: var(--vert-ok);
+    }
+
+    .alert-eyebrow {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--rouge);
+      margin-bottom: 4px;
+    }
+
+    .alert-banner.is-quiet .alert-eyebrow {
+      color: var(--vert-ok);
+    }
+
+    .alert-title {
+      font-family: 'Fraunces', serif;
+      font-size: 17px;
+      font-weight: 500;
+      line-height: 1.2;
+    }
+
+    .alert-detail {
+      font-size: 12px;
+      color: var(--ink-soft);
+      margin-top: 4px;
+    }
+
+    /* Grille de stats */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      margin-top: 4px;
+    }
+
+    .stat {
+      background: var(--bg-card);
+      padding: 12px 0;
+    }
+
+    .stat-value {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--ink);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--ink-mute);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* Détails des capteurs : ligne par statut */
+    .breakdown {
+      font-size: 13px;
+    }
+
+    .br-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 6px 0;
+      border-bottom: 1px dotted var(--border);
+    }
+
+    .br-row:last-child {
+      border-bottom: none;
+    }
+
+    .br-label {
+      color: var(--ink-soft);
+    }
+
+    .br-label::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+      background: currentColor;
+      vertical-align: middle;
+      opacity: .8;
+    }
+
+    .br-value {
+      font-family: 'IBM Plex Mono', monospace;
+      font-weight: 500;
+    }
+
+    .lvl-rouge {
+      color: var(--rouge);
+    }
+
+    .lvl-orange {
+      color: var(--orange);
+    }
+
+    .lvl-jaune {
+      color: var(--jaune);
+    }
+
+    .lvl-ok {
+      color: var(--vert-ok);
+    }
+
+    .lvl-panne {
+      color: var(--ink-mute);
+    }
+
+    /* Toggles de couches */
+    .layer-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .layer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      cursor: pointer;
+      border-bottom: 1px dotted var(--border);
+      user-select: none;
+    }
+
+    .layer:last-child {
+      border-bottom: none;
+    }
+
+    .layer:hover .layer-name {
+      color: var(--accent);
+    }
+
+    .layer input[type="checkbox"] {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 1px solid var(--border-firm);
+      border-radius: 3px;
+      background: var(--bg-card);
+      cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .layer input[type="checkbox"]:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .layer input[type="checkbox"]:checked::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 12px;
+      line-height: 1;
+    }
+
+    .layer-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .layer-name {
+      flex: 1;
+      font-size: 13px;
+      transition: color 120ms ease;
+    }
+
+    .layer-count {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      color: var(--ink-mute);
+    }
+
+    /* Liste des événements */
+    .event-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      background: var(--border);
+    }
+
+    .event-item {
+      background: var(--bg-card);
+      padding: 10px 0;
+      cursor: pointer;
+      transition: background 120ms ease;
+      display: grid;
+      grid-template-columns: 4px 1fr auto;
+      gap: 10px;
+    }
+
+    .event-item:hover {
+      background: var(--bg-soft);
+    }
+
+    .event-stripe {
+      width: 3px;
+      align-self: stretch;
+      border-radius: 1px;
+    }
+
+    .event-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .event-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .event-meta {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-mute);
+    }
+
+    .event-badge {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      align-self: center;
+      padding: 2px 6px;
+      border-radius: 2px;
+      white-space: nowrap;
+    }
+
+    .badge-en-cours {
+      background: var(--rouge);
+      color: white;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.6;
+      }
+    }
+
+    /* ============================================================
+       MAP : popups personnalisés
+       ============================================================ */
+    .leaflet-popup-content-wrapper {
+      background: var(--bg-card);
+      color: var(--ink);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-soft);
+      border: 1px solid var(--border);
+    }
+
+    .leaflet-popup-content {
+      margin: 14px 16px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .leaflet-popup-tip {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+    }
+
+    .pop-title {
+      font-family: 'Fraunces', serif;
+      font-size: 16px;
+      font-weight: 500;
+      margin: 0 0 4px 0;
+      color: var(--ink);
+    }
+
+    .pop-type {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-mute);
+      margin-bottom: 8px;
+    }
+
+    .pop-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 3px 0;
+    }
+
+    .pop-row+.pop-row {
+      border-top: 1px dotted var(--border);
+    }
+
+    .pop-label {
+      color: var(--ink-soft);
+    }
+
+    .pop-val {
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--ink);
+    }
+
+    /* Marqueurs personnalisés pour capteurs */
+    .sensor-marker {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .sensor-marker.is-panne,
+    .sensor-marker.is-maintenance,
+    .sensor-marker.is-retire {
+      filter: grayscale(80%);
+      opacity: .7;
+    }
+
+    /* Marqueurs personnalisés pour enjeux ponctuels */
+    .enjeu-marker {
+      width: 18px;
+      height: 18px;
+      border-radius: 3px;
+      border: 1.5px solid white;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* État vide / erreur */
+    .splash {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      text-align: center;
+      z-index: 9999;
+    }
+
+    .splash-title {
+      font-family: 'Fraunces', serif;
+      font-size: 28px;
+      font-style: italic;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .splash-message {
+      max-width: 520px;
+      color: var(--ink-soft);
+      margin-bottom: 24px;
+    }
+
+    .splash code {
+      background: var(--bg-soft);
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .splash-error {
+      border-left: 3px solid var(--rouge);
+      padding: 14px 18px;
+      background: white;
+      text-align: left;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      max-width: 600px;
+      margin-top: 16px;
+      box-shadow: var(--shadow-soft);
+    }
+
+    /* Légende sur la carte */
+    .legend {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: var(--bg-card);
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-soft);
+      font-size: 11px;
+      max-width: 200px;
+      z-index: 500;
+    }
+
+    .legend-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--ink-mute);
+      margin-bottom: 8px;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 0;
+    }
+
+    .legend-sw {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* Scrollbar discrète */
+    .sidebar::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+      background: var(--border-firm);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Splash écran (montré si pas configuré ou en cas d'erreur) -->
+  <div id="splash" class="splash" style="display: none;">
+    <div class="splash-title">Vigi-Crues Maroc</div>
+    <div class="splash-message" id="splash-message"></div>
+    <div id="splash-error" class="splash-error" style="display: none;"></div>
+  </div>
+
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <span class="brand-mark">Vigi-Crues Maroc</span>
+        <span class="brand-sub">Tableau de bord opérationnel · Dataset pédagogique</span>
+      </div>
+      <div class="header-right">
+        <span id="last-update">—</span>
+        <button class="refresh-btn" id="refresh">Actualiser</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <aside class="sidebar">
+
+        <!-- Bannière alerte (rouge si événement en cours, vert sinon) -->
+        <div id="alert-banner" class="alert-banner is-quiet">
+          <div class="alert-eyebrow">Statut</div>
+          <div class="alert-title" id="alert-title">Aucun événement actif</div>
+          <div class="alert-detail" id="alert-detail">Surveillance nominale sur les 5 bassins</div>
+        </div>
+
+        <!-- Stats principales -->
+        <div class="sec">
+          <div class="sec-title">Surveillance</div>
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="stat-value num" id="stat-capteurs">—</div>
+              <div class="stat-label">Capteurs actifs</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value num" id="stat-evenements">—</div>
+              <div class="stat-label">Événements (12 mois)</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-title">Capteurs par statut</div>
+          <div class="breakdown" id="capteurs-breakdown">
+            <div class="br-row"><span class="br-label lvl-ok">Chargement…</span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-title">Capteurs en alerte</div>
+          <div class="breakdown" id="alertes-breakdown">
+            <div class="br-row"><span class="br-label lvl-ok">—</span></div>
+          </div>
+        </div>
+
+        <!-- Toggles des couches -->
+        <div class="sec">
+          <div class="sec-title">Couches</div>
+          <div class="layer-list" id="layer-list">
+            <!-- généré dynamiquement -->
+          </div>
+        </div>
+
+        <!-- Liste des événements (cliquable pour zoomer) -->
+        <div class="sec">
+          <div class="sec-title">Événements</div>
+          <div class="event-list" id="event-list">
+            <!-- généré dynamiquement -->
+          </div>
+        </div>
+
+      </aside>
+
+      <div class="map">
+        <div id="map"></div>
+        <div class="legend">
+          <div class="legend-title">Niveau d'aléa</div>
+          <div class="legend-row">
+            <div class="legend-sw" style="background:var(--jaune);opacity:.6"></div>
+            <span>Faible</span>
+          </div>
+          <div class="legend-row">
+            <div class="legend-sw" style="background:var(--orange);opacity:.6"></div>
+            <span>Moyen</span>
+          </div>
+          <div class="legend-row">
+            <div class="legend-sw" style="background:var(--rouge);opacity:.6"></div>
+            <span>Fort</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    /* ==========================================================
+       CONFIGURATION — À RENSEIGNER AVANT D'OUVRIR LA PAGE
+       ==========================================================
+       1. Aller sur supabase.com → votre projet → Settings → API
+       2. Copier "Project URL" dans SUPABASE_URL
+       3. Copier "anon public" dans SUPABASE_ANON_KEY
+       4. Sauvegarder, ouvrir la page dans un navigateur
+       ========================================================== */
+    const SUPABASE_URL = '';        // ex: 'https://xyzabc.supabase.co'
+    const SUPABASE_ANON_KEY = '';   // ex: 'eyJhbGciOiJI...'
+
+    /* ============================================================
+       Couleurs (synchronisées avec les variables CSS)
+       ============================================================ */
+    const COLORS = {
+      bassin: '#2e5f7a',
+      oued_perenne: '#0f4c5c',
+      oued_temporaire: '#5d899a',
+      oued_torrentiel: '#97181a',
+      alea_faible: '#d99921',
+      alea_moyen: '#c1561a',
+      alea_fort: '#97181a',
+      grav_faible: '#8a9b6c',
+      grav_moyen: '#d99921',
+      grav_fort: '#c1561a',
+      grav_majeur: '#6b1314',
+      capteur_OK: '#4a6b3d',
+      capteur_JAUNE: '#d99921',
+      capteur_ORANGE: '#c1561a',
+      capteur_ROUGE: '#97181a',
+      capteur_NULL: '#8a8377',
+      enjeu_hopital: '#97181a',
+      enjeu_ecole: '#0f4c5c',
+      enjeu_poste_electrique: '#d99921',
+      enjeu_barrage: '#2e5f7a',
+      enjeu_zone_residentielle: '#5d574c',
+      enjeu_zone_industrielle: '#8a8377',
+      enjeu_zone_agricole: '#8a9b6c',
+    };
+
+    const ENJEU_LABEL = {
+      hopital: 'H',
+      ecole: 'É',
+      poste_electrique: 'P',
+      barrage: 'B',
+      zone_residentielle: 'Z. résidentielle',
+      zone_industrielle: 'Z. industrielle',
+      zone_agricole: 'Z. agricole',
+    };
+
+    const CAPTEUR_LABEL = {
+      pluviometre: 'P',
+      limnimetre: 'L',
+      station_meteo: 'M',
+    };
+
+    /* ============================================================
+       Configuration des couches : nom affiché, swatch, defaultOn
+       ============================================================ */
+    const LAYERS_META = [
+      { key: 'bassins', label: 'Bassins versants', color: COLORS.bassin, on: true },
+      { key: 'oueds', label: 'Oueds', color: COLORS.oued_perenne, on: true },
+      { key: 'zones_alea', label: 'Zones d\'aléa', color: COLORS.alea_fort, on: true },
+      { key: 'capteurs', label: 'Capteurs', color: COLORS.capteur_OK, on: true },
+      { key: 'enjeux', label: 'Enjeux exposés', color: COLORS.enjeu_hopital, on: true },
+      { key: 'evenements', label: 'Événements', color: COLORS.grav_fort, on: true },
+    ];
+
+    /* ============================================================
+       Endpoints — chaque clé pointe sur sa vue Supabase
+       ============================================================ */
+    const ENDPOINTS = {
+      bassins: 'v_bassins_geojson',
+      oueds: 'v_oueds_geojson',
+      zones_alea: 'v_zones_alea_geojson',
+      capteurs: 'v_capteurs_geojson',
+      enjeux: 'v_enjeux_geojson',
+      evenements: 'v_evenements_geojson',
+    };
+
+    /* ============================================================
+       État global
+       ============================================================ */
+    let map;
+    const layerGroups = {};   // { bassins: L.layerGroup, ... }
+    const rawData = {};       // { bassins: [...], capteurs: [...], ... }
+
+    /* ============================================================
+       SETUP / VÉRIFICATION DE LA CONFIG
+       ============================================================ */
+    function showSplash(message, errorText) {
+      document.getElementById('splash').style.display = 'flex';
+      document.getElementById('splash-message').innerHTML = message;
+      const errEl = document.getElementById('splash-error');
+      if (errorText) {
+        errEl.style.display = 'block';
+        errEl.textContent = errorText;
+      } else {
+        errEl.style.display = 'none';
+      }
+    }
+
+    function checkConfig() {
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        showSplash(
+          'Le fichier doit être configuré avant la première utilisation.<br><br>' +
+          'Ouvrez le code source du fichier <code>dashboard.html</code> et renseignez ' +
+          'les constantes <code>SUPABASE_URL</code> et <code>SUPABASE_ANON_KEY</code> ' +
+          'en début de script (vous les trouverez dans <strong>Supabase → Settings → API</strong>).'
+        );
+        return false;
+      }
+      return true;
+    }
+
+    /* ============================================================
+       API : fetch d'une vue, retourne un tableau de rows
+       ============================================================ */
+    async function fetchView(viewName) {
+      const url = `${SUPABASE_URL}/rest/v1/${viewName}?select=*`;
+      const res = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
+      if (!res.ok) {
+        throw new Error(`${viewName} → ${res.status} ${res.statusText}`);
+      }
+      return res.json();
+    }
+
+    /* ============================================================
+       Conversion : rows Supabase → FeatureCollection GeoJSON
+       ============================================================ */
+    function rowsToFeatures(rows) {
+      return rows
+        .filter(r => r.geom_json)
+        .map(r => {
+          const { geom_json, ...props } = r;
+          return {
+            type: 'Feature',
+            properties: props,
+            geometry: geom_json,
+          };
+        });
+    }
+
+    /* ============================================================
+       Construction des couches Leaflet
+       ============================================================ */
+
+    function buildBassins(rows) {
+      const features = rowsToFeatures(rows);
+      return L.geoJSON({ type: 'FeatureCollection', features }, {
+        style: () => ({
+          color: COLORS.bassin,
+          weight: 1.2,
+          opacity: 0.7,
+          fillColor: COLORS.bassin,
+          fillOpacity: 0.04,
+          dashArray: '3,3',
+        }),
+        onEachFeature: (f, layer) => {
+          layer.bindTooltip(f.properties.nom, { permanent: false, direction: 'center', className: 'bassin-label' });
+          layer.bindPopup(popupBassin(f.properties));
+        },
+      });
+    }
+
+    function buildOueds(rows) {
+      const features = rowsToFeatures(rows);
+      return L.geoJSON({ type: 'FeatureCollection', features }, {
+        style: (f) => {
+          const reg = f.properties.regime;
+          return {
+            color: reg === 'torrentiel' ? COLORS.oued_torrentiel
+              : reg === 'temporaire' ? COLORS.oued_temporaire
+                : COLORS.oued_perenne,
+            weight: reg === 'torrentiel' ? 3.2 : 2,
+            opacity: 0.85,
+          };
+        },
+        onEachFeature: (f, layer) => layer.bindPopup(popupOued(f.properties)),
+      });
+    }
+
+    function buildZonesAlea(rows) {
+      const features = rowsToFeatures(rows);
+      return L.geoJSON({ type: 'FeatureCollection', features }, {
+        style: (f) => {
+          const n = f.properties.niveau;
+          const color = n === 'fort' ? COLORS.alea_fort
+            : n === 'moyen' ? COLORS.alea_moyen
+              : COLORS.alea_faible;
+          return { color, weight: 0.8, opacity: 0.5, fillColor: color, fillOpacity: 0.28 };
+        },
+        onEachFeature: (f, layer) => layer.bindPopup(popupZoneAlea(f.properties)),
+      });
+    }
+
+    function buildCapteurs(rows) {
+      return L.geoJSON({ type: 'FeatureCollection', features: rowsToFeatures(rows) }, {
+        pointToLayer: (feat, latlng) => {
+          const p = feat.properties;
+          const color = COLORS['capteur_' + (p.niveau_actuel || 'NULL')];
+          const letter = CAPTEUR_LABEL[p.type_capteur] || '?';
+          const icon = L.divIcon({
+            className: '',
+            html: `<div class="sensor-marker is-${p.statut}" style="background:${color}">${letter}</div>`,
+            iconSize: [22, 22],
+            iconAnchor: [11, 11],
+          });
+          return L.marker(latlng, { icon });
+        },
+        onEachFeature: (f, layer) => layer.bindPopup(popupCapteur(f.properties)),
+      });
+    }
+
+    function buildEnjeux(rows) {
+      // Deux sous-couches : POINT et POLYGON
+      const points = [];
+      const polys = [];
+      rowsToFeatures(rows).forEach(f => {
+        if (f.geometry.type === 'Point') points.push(f);
+        else polys.push(f);
+      });
+
+      const polyLayer = L.geoJSON({ type: 'FeatureCollection', features: polys }, {
+        style: (f) => {
+          const c = COLORS['enjeu_' + f.properties.type_enjeu] || '#999';
+          return { color: c, weight: 1, fillColor: c, fillOpacity: 0.20 };
+        },
+        onEachFeature: (f, layer) => layer.bindPopup(popupEnjeu(f.properties)),
+      });
+
+      const pointLayer = L.geoJSON({ type: 'FeatureCollection', features: points }, {
+        pointToLayer: (feat, latlng) => {
+          const p = feat.properties;
+          const color = COLORS['enjeu_' + p.type_enjeu] || '#999';
+          const letter = ENJEU_LABEL[p.type_enjeu] || '?';
+          const icon = L.divIcon({
+            className: '',
+            html: `<div class="enjeu-marker" style="background:${color}">${letter}</div>`,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+          });
+          return L.marker(latlng, { icon });
+        },
+        onEachFeature: (f, layer) => layer.bindPopup(popupEnjeu(f.properties)),
+      });
+
+      return L.layerGroup([polyLayer, pointLayer]);
+    }
+
+    function buildEvenements(rows) {
+      return L.geoJSON({ type: 'FeatureCollection', features: rowsToFeatures(rows) }, {
+        style: (f) => {
+          const color = COLORS['grav_' + f.properties.gravite] || COLORS.grav_fort;
+          return {
+            color,
+            weight: f.properties.en_cours ? 3 : 1.5,
+            opacity: 0.9,
+            fillColor: color,
+            fillOpacity: f.properties.en_cours ? 0.35 : 0.18,
+            dashArray: f.properties.en_cours ? null : '4,4',
+          };
+        },
+        onEachFeature: (f, layer) => {
+          layer.bindPopup(popupEvenement(f.properties));
+          // Stocker une référence pour pouvoir zoomer dessus depuis la sidebar
+          layer.evenementId = f.properties.id;
+        },
+      });
+    }
+
+    /* ============================================================
+       Popups : générateurs HTML
+       ============================================================ */
+    function popupBassin(p) {
+      return `
+      <div class="pop-type">Bassin versant · ${p.code}</div>
+      <div class="pop-title">${p.nom}</div>
+      <div class="pop-row"><span class="pop-label">Superficie</span><span class="pop-val">${fmt(p.superficie_km2)} km²</span></div>
+    `;
+    }
+    function popupOued(p) {
+      return `
+      <div class="pop-type">Oued · ${p.regime}</div>
+      <div class="pop-title">${p.nom}</div>
+      <div class="pop-row"><span class="pop-label">Bassin</span><span class="pop-val">${p.bassin_nom || '—'}</span></div>
+      <div class="pop-row"><span class="pop-label">Longueur</span><span class="pop-val">${fmt(p.longueur_km)} km</span></div>
+    `;
+    }
+    function popupZoneAlea(p) {
+      return `
+      <div class="pop-type">Aléa · ${p.niveau}</div>
+      <div class="pop-title">${p.nom || 'Zone d\'aléa'}</div>
+      <div class="pop-row"><span class="pop-label">Bassin</span><span class="pop-val">${p.bassin_nom || '—'}</span></div>
+      <div class="pop-row"><span class="pop-label">Période de retour</span><span class="pop-val">${p.periode_retour_ans || '—'} ans</span></div>
+      <div class="pop-row"><span class="pop-label">Surface</span><span class="pop-val">${fmt(p.superficie_km2)} km²</span></div>
+    `;
+    }
+    function popupCapteur(p) {
+      const niv = p.niveau_actuel || '—';
+      const seuilsTxt = p.seuil_jaune ? `${p.seuil_jaune} / ${p.seuil_orange} / ${p.seuil_rouge} ${p.unite}` : '—';
+      return `
+      <div class="pop-type">Capteur · ${p.type_capteur}</div>
+      <div class="pop-title">${p.code}</div>
+      <div class="pop-row"><span class="pop-label">Statut</span><span class="pop-val">${p.statut}</span></div>
+      <div class="pop-row"><span class="pop-label">Bassin</span><span class="pop-val">${p.bassin_nom || '—'}</span></div>
+      <div class="pop-row"><span class="pop-label">Dernière valeur</span><span class="pop-val">${p.derniere_valeur ?? '—'} ${p.unite || ''}</span></div>
+      <div class="pop-row"><span class="pop-label">Niveau actuel</span><span class="pop-val lvl-${niv.toLowerCase()}">${niv}</span></div>
+      <div class="pop-row"><span class="pop-label">Seuils J/O/R</span><span class="pop-val">${seuilsTxt}</span></div>
+    `;
+    }
+    function popupEnjeu(p) {
+      return `
+      <div class="pop-type">${p.type_enjeu.replace(/_/g, ' ')}</div>
+      <div class="pop-title">${p.nom}</div>
+      <div class="pop-row"><span class="pop-label">Bassin</span><span class="pop-val">${p.bassin_nom || '—'}</span></div>
+      ${p.capacite ? `<div class="pop-row"><span class="pop-label">Capacité</span><span class="pop-val">${fmt(p.capacite)}</span></div>` : ''}
+      ${p.population_estimee ? `<div class="pop-row"><span class="pop-label">Population</span><span class="pop-val">${fmt(p.population_estimee)}</span></div>` : ''}
+    `;
+    }
+    function popupEvenement(p) {
+      return `
+      <div class="pop-type">Événement · ${p.gravite}${p.en_cours ? ' · EN COURS' : ''}</div>
+      <div class="pop-title">${p.nom}</div>
+      <div class="pop-row"><span class="pop-label">Bassin</span><span class="pop-val">${p.bassin_nom || '—'}</span></div>
+      <div class="pop-row"><span class="pop-label">Début</span><span class="pop-val">${formatDate(p.date_debut)}</span></div>
+      <div class="pop-row"><span class="pop-label">Fin</span><span class="pop-val">${p.date_fin ? formatDate(p.date_fin) : 'en cours'}</span></div>
+      ${p.nb_victimes > 0 ? `<div class="pop-row"><span class="pop-label">Victimes</span><span class="pop-val">${p.nb_victimes}</span></div>` : ''}
+      ${p.nb_personnes_evacuees > 0 ? `<div class="pop-row"><span class="pop-label">Évacués</span><span class="pop-val">${fmt(p.nb_personnes_evacuees)}</span></div>` : ''}
+      ${p.cout_estime_mad ? `<div class="pop-row"><span class="pop-label">Coût</span><span class="pop-val">${fmtMad(p.cout_estime_mad)}</span></div>` : ''}
+    `;
+    }
+
+    /* ============================================================
+       Sidebar : stats, breakdowns, listes
+       ============================================================ */
+    function renderStats() {
+      const capteursActifs = rawData.capteurs.filter(c => c.statut === 'actif').length;
+      document.getElementById('stat-capteurs').textContent = capteursActifs;
+
+      const events12mo = rawData.evenements.filter(e => {
+        const d = new Date(e.date_debut);
+        const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+        return d >= oneYearAgo;
+      }).length;
+      document.getElementById('stat-evenements').textContent = events12mo;
+    }
+
+    function renderBanner() {
+      const enCours = rawData.evenements.filter(e => e.en_cours);
+      const banner = document.getElementById('alert-banner');
+      const title = document.getElementById('alert-title');
+      const detail = document.getElementById('alert-detail');
+
+      if (enCours.length > 0) {
+        banner.classList.remove('is-quiet');
+        const e = enCours[0];
+        title.textContent = e.nom;
+        detail.textContent = `${e.bassin_nom || ''} · gravité ${e.gravite}${enCours.length > 1 ? ` (+${enCours.length - 1} autres)` : ''}`;
+      } else {
+        banner.classList.add('is-quiet');
+        title.textContent = 'Aucun événement actif';
+        detail.textContent = 'Surveillance nominale sur les 5 bassins';
+      }
+    }
+
+    function renderCapteursBreakdown() {
+      const stats = { actif: 0, panne: 0, maintenance: 0, retire: 0 };
+      rawData.capteurs.forEach(c => { stats[c.statut] = (stats[c.statut] || 0) + 1; });
+      const el = document.getElementById('capteurs-breakdown');
+      el.innerHTML = `
+      <div class="br-row"><span class="br-label lvl-ok">Actifs</span><span class="br-value">${stats.actif}</span></div>
+      <div class="br-row"><span class="br-label lvl-panne">En panne</span><span class="br-value">${stats.panne || 0}</span></div>
+      <div class="br-row"><span class="br-label lvl-panne">Maintenance</span><span class="br-value">${stats.maintenance || 0}</span></div>
+      <div class="br-row"><span class="br-label lvl-panne">Retirés</span><span class="br-value">${stats.retire || 0}</span></div>
+    `;
+    }
+
+    function renderAlertesBreakdown() {
+      const counts = { ROUGE: 0, ORANGE: 0, JAUNE: 0, OK: 0 };
+      rawData.capteurs.forEach(c => {
+        if (c.statut === 'actif' && c.niveau_actuel) counts[c.niveau_actuel]++;
+      });
+      const el = document.getElementById('alertes-breakdown');
+      el.innerHTML = `
+      <div class="br-row"><span class="br-label lvl-rouge">Rouge</span><span class="br-value">${counts.ROUGE}</span></div>
+      <div class="br-row"><span class="br-label lvl-orange">Orange</span><span class="br-value">${counts.ORANGE}</span></div>
+      <div class="br-row"><span class="br-label lvl-jaune">Jaune</span><span class="br-value">${counts.JAUNE}</span></div>
+      <div class="br-row"><span class="br-label lvl-ok">Nominal</span><span class="br-value">${counts.OK}</span></div>
+    `;
+    }
+
+    function renderLayerToggles() {
+      const list = document.getElementById('layer-list');
+      list.innerHTML = '';
+      LAYERS_META.forEach(meta => {
+        const count = (rawData[meta.key] || []).length;
+        const row = document.createElement('label');
+        row.className = 'layer';
+        row.innerHTML = `
+        <input type="checkbox" ${meta.on ? 'checked' : ''} data-layer="${meta.key}" />
+        <div class="layer-swatch" style="background:${meta.color}"></div>
+        <span class="layer-name">${meta.label}</span>
+        <span class="layer-count num">${count}</span>
+      `;
+        list.appendChild(row);
+        row.querySelector('input').addEventListener('change', (e) => {
+          toggleLayer(meta.key, e.target.checked);
+        });
+      });
+    }
+
+    function renderEventList() {
+      const list = document.getElementById('event-list');
+      list.innerHTML = '';
+      const sorted = [...rawData.evenements].sort((a, b) => {
+        if (a.en_cours && !b.en_cours) return -1;
+        if (!a.en_cours && b.en_cours) return 1;
+        return new Date(b.date_debut) - new Date(a.date_debut);
+      });
+      sorted.forEach(e => {
+        const item = document.createElement('div');
+        item.className = 'event-item';
+        const color = COLORS['grav_' + e.gravite] || COLORS.grav_fort;
+        item.innerHTML = `
+        <div class="event-stripe" style="background:${color}"></div>
+        <div class="event-body">
+          <div class="event-name">${e.nom}</div>
+          <div class="event-meta">${formatDateShort(e.date_debut)} · ${e.gravite}</div>
+        </div>
+        ${e.en_cours ? '<span class="event-badge badge-en-cours">en cours</span>' : ''}
+      `;
+        item.addEventListener('click', () => zoomToEvenement(e.id));
+        list.appendChild(item);
+      });
+    }
+
+    /* ============================================================
+       Interactions : toggle, zoom
+       ============================================================ */
+    function toggleLayer(key, on) {
+      const group = layerGroups[key];
+      if (!group) return;
+      if (on) group.addTo(map);
+      else map.removeLayer(group);
+    }
+
+    function zoomToEvenement(id) {
+      const group = layerGroups.evenements;
+      if (!group) return;
+      group.eachLayer(l => {
+        if (l.evenementId === id) {
+          map.fitBounds(l.getBounds(), { padding: [50, 50], maxZoom: 11 });
+          l.openPopup();
+        }
+      });
+    }
+
+    /* ============================================================
+       Utils de formatage
+       ============================================================ */
+    function fmt(n) {
+      if (n == null) return '—';
+      return new Intl.NumberFormat('fr-FR').format(n);
+    }
+    function fmtMad(n) {
+      if (n == null) return '—';
+      if (n >= 1e6) return (n / 1e6).toFixed(1).replace('.', ',') + ' M MAD';
+      return fmt(n) + ' MAD';
+    }
+    function formatDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+    function formatDateShort(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
+    }
+
+    /* ============================================================
+       INITIALISATION
+       ============================================================ */
+    async function init() {
+      if (!checkConfig()) return;
+
+      // Carte centrée sur le Maroc
+      map = L.map('map', { zoomControl: true }).setView([31.5, -7.5], 6);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap · © CartoDB · Dataset pédagogique fictif',
+        maxZoom: 18,
+      }).addTo(map);
+
+      document.getElementById('refresh').addEventListener('click', loadAll);
+      await loadAll();
+    }
+
+    async function loadAll() {
+      const btn = document.getElementById('refresh');
+      btn.disabled = true;
+      btn.textContent = 'Chargement…';
+
+      try {
+        // Fetch en parallèle de toutes les vues
+        const [bassins, oueds, zones_alea, capteurs, enjeux, evenements] = await Promise.all([
+          fetchView(ENDPOINTS.bassins),
+          fetchView(ENDPOINTS.oueds),
+          fetchView(ENDPOINTS.zones_alea),
+          fetchView(ENDPOINTS.capteurs),
+          fetchView(ENDPOINTS.enjeux),
+          fetchView(ENDPOINTS.evenements),
+        ]);
+
+        rawData.bassins = bassins;
+        rawData.oueds = oueds;
+        rawData.zones_alea = zones_alea;
+        rawData.capteurs = capteurs;
+        rawData.enjeux = enjeux;
+        rawData.evenements = evenements;
+
+        // Retirer d'anciennes couches si refresh
+        Object.values(layerGroups).forEach(g => map.removeLayer(g));
+
+        // Construire les nouvelles couches
+        layerGroups.bassins = buildBassins(bassins);
+        layerGroups.oueds = buildOueds(oueds);
+        layerGroups.zones_alea = buildZonesAlea(zones_alea);
+        layerGroups.capteurs = buildCapteurs(capteurs);
+        layerGroups.enjeux = buildEnjeux(enjeux);
+        layerGroups.evenements = buildEvenements(evenements);
+
+        // Ajouter à la carte selon l'état par défaut
+        LAYERS_META.forEach(meta => {
+          if (meta.on) layerGroups[meta.key].addTo(map);
+        });
+
+        // Rendu de la sidebar
+        renderBanner();
+        renderStats();
+        renderCapteursBreakdown();
+        renderAlertesBreakdown();
+        renderLayerToggles();
+        renderEventList();
+
+        // Horodatage
+        document.getElementById('last-update').textContent =
+          'Dernière maj · ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+        // Fermer le splash s'il était ouvert
+        document.getElementById('splash').style.display = 'none';
+      } catch (err) {
+        console.error(err);
+        showSplash(
+          'Erreur de connexion à Supabase.<br><br>' +
+          'Vérifiez que vous avez bien exécuté les scripts <code>01_schema.sql</code>, ' +
+          '<code>02_seed.sql</code> et <code>06_views_geojson.sql</code>, et que ' +
+          '<code>SUPABASE_URL</code> + <code>SUPABASE_ANON_KEY</code> sont corrects.',
+          err.message
+        );
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Actualiser';
+      }
+    }
+
+    // Go
+    init();
+  </script>
+</body>
+
+</html>
