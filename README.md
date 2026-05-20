@@ -1,3 +1,4 @@
+https://docs.google.com/presentation/d/1a1rH_2TMTzpP8X2bX6upEwUuyVXxcrz6WAS98o32euY/edit?usp=sharing
 # Guide TP — Concevoir et interroger une base spatiale du risque d'inondation au Maroc
 
 > Durée estimée : **2h30 à 3h** · Public : développeurs, SIGistes, débutants en BD
