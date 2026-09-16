@@ -1,4 +1,4 @@
-https://docs.google.com/presentation/d/1a1rH_2TMTzpP8X2bX6upEwUuyVXxcrz6WAS98o32euY/edit?usp=sharing
+<img width="1337" height="631" alt="image" src="https://github.com/user-attachments/assets/679b7b10-185d-480e-b261-63fd26509e09" />https://docs.google.com/presentation/d/1a1rH_2TMTzpP8X2bX6upEwUuyVXxcrz6WAS98o32euY/edit?usp=sharing
 # Guide TP — Concevoir et interroger une base spatiale du risque d'inondation au Maroc
 
 > Durée estimée : **2h30 à 3h** · Public : développeurs, SIGistes, débutants en BD
@@ -163,4 +163,5 @@ Liste-moi d'abord :
 - La structure capteur/mesure
 
 Vous devriez constater que les sorties **convergent fortement** vers une structure similaire — proche du schéma de référence que vous allez charger ensuite. Il restera des différences mineures (nommage, ordre des colonnes, choix précis sur la table des dégâts), mais l'architecture globale sera la même.
+https://docs.google.com/presentation/d/1tKNHd6QX5Kxr0VABUKQDf1UuPxWJdNxKDVi8eSGLZuE/edit?usp=sharing
 
