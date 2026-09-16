@@ -1,4 +1,4 @@
-<img width="1337" height="631" alt="image" src="https://github.com/user-attachments/assets/679b7b10-185d-480e-b261-63fd26509e09" />https://docs.google.com/presentation/d/1a1rH_2TMTzpP8X2bX6upEwUuyVXxcrz6WAS98o32euY/edit?usp=sharing
+
 # Guide TP — Concevoir et interroger une base spatiale du risque d'inondation au Maroc
 
 > Durée estimée : **2h30 à 3h** · Public : développeurs, SIGistes, débutants en BD
