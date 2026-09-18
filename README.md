@@ -163,5 +163,5 @@ Liste-moi d'abord :
 - La structure capteur/mesure
 
 Vous devriez constater que les sorties **convergent fortement** vers une structure similaire — proche du schéma de référence que vous allez charger ensuite. Il restera des différences mineures (nommage, ordre des colonnes, choix précis sur la table des dégâts), mais l'architecture globale sera la même.
-https://docs.google.com/presentation/d/1ghlgJVjVnTuZEy0R6TkHxPsH173Xuj2-akKDMBa9scU/edit?usp=sharing
+https://docs.google.com/presentation/d/1tgvLpBGC6yRWaQT6KjoIfmPWRhkWlXimgNHxVlLbU4Y/edit?usp=sharing
 
