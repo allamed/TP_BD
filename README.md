@@ -17,7 +17,7 @@
 4. **Distinguer** les notions de SRID, projection, geometry vs geography, qui sont les sources d'erreur les plus fréquentes en spatial.
 5. **Auditer** une réponse de LLM contenant du SQL spatial avec une checklist de 5 questions-réflexes.
 
-**Le message central du TP** : *l'IA produit du code qui s'exécute, pas nécessairement du code qui est juste*. Le rôle du développeur ou du SIGiste reste critique. Vous allez en faire l'expérience plutôt que de l'entendre.
+**Le message central du TP** : *l'IA produit du code qui s'exécute, pas nécessairement du code qui répond à notre besoin*. Le rôle du développeur ou du SIGiste reste critique. Vous allez en faire l'expérience plutôt que de l'entendre.
 
 ---
 
